@@ -57,12 +57,12 @@ const cognitoPool =
 const ADMINS = [
   {
     name: 'Beto (Profe Beto)',
-    email: 'beto@quevivaelfutbol.com',
+    email: 'betogoyechea@gmail.com',
     role: 'admin'
   },
   {
     name: 'Agustín Goyechea',
-    email: 'agustin@quevivaelfutbol.com',
+    email: 'nitsuga022@gmail.com',
     role: 'admin'
   }
 ];
