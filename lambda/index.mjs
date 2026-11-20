@@ -13,6 +13,7 @@ const TABLES = {
   students: process.env.STUDENTS_TABLE || "QueVivaElFutbol_Students",
   attendance: process.env.ATTENDANCE_TABLE || "QueVivaElFutbol_Attendance",
   transactions: process.env.TRANSACTIONS_TABLE || "QueVivaElFutbol_Transactions",
+  coaches: process.env.COACHES_TABLE || "QueVivaElFutbol_Coaches",
 };
 
 const headers = {
@@ -45,6 +46,24 @@ export const handler = async (event) => {
       if (method === "DELETE") {
         const id = event.queryStringParameters?.id || path.split("/").pop();
         await docClient.send(new DeleteCommand({ TableName: TABLES.students, Key: { id } }));
+        return { statusCode: 200, headers, body: JSON.stringify({ deleted: id }) };
+      }
+    }
+
+    if (path.includes("/coaches")) {
+      if (method === "GET") {
+        const res = await docClient.send(new ScanCommand({ TableName: TABLES.coaches }));
+        return { statusCode: 200, headers, body: JSON.stringify(res.Items || []) };
+      }
+      if (method === "POST" || method === "PUT") {
+        const item = JSON.parse(event.body || "{}");
+        if (!item.id) item.id = `profe-${Date.now()}`;
+        await docClient.send(new PutCommand({ TableName: TABLES.coaches, Item: item }));
+        return { statusCode: 200, headers, body: JSON.stringify(item) };
+      }
+      if (method === "DELETE") {
+        const id = event.queryStringParameters?.id || path.split("/").pop();
+        await docClient.send(new DeleteCommand({ TableName: TABLES.coaches, Key: { id } }));
         return { statusCode: 200, headers, body: JSON.stringify({ deleted: id }) };
       }
     }

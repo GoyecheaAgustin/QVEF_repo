@@ -19,7 +19,10 @@ import {
   ShieldCheck,
   AlertCircle,
   UserPlus,
-  DollarSign
+  DollarSign,
+  UserCog,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import {
   BarChart,
@@ -33,18 +36,62 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// Dos administradores con acceso total a todas las funciones
+const ADMINS = [
+  {
+    name: 'Beto (Profe Beto)',
+    email: 'beto@quevivaelfutbol.com',
+    role: 'admin'
+  },
+  {
+    name: 'Agustín Goyechea',
+    email: 'agustin@quevivaelfutbol.com',
+    role: 'admin'
+  }
+];
+
+// Grupos y categorías de chicos:
+// 1. Competencia: año de nacimiento del 2014 al 2019
+// 2. Escuelita: chicos de 4 a 12 años
+const COMPETITION_YEARS = ['2014', '2015', '2016', '2017', '2018', '2019'];
+const ESCUELITA_CATEGORIES = [
+  'Escuelita (4-6 años)',
+  'Escuelita (7-9 años)',
+  'Escuelita (10-12 años)'
+];
+const ALL_CATEGORIES = [...COMPETITION_YEARS, ...ESCUELITA_CATEGORIES];
+
+const INITIAL_COACHES = [
+  {
+    id: 'profe-1',
+    name: 'Lucas Martínez',
+    email: 'lucas.profe@quevivaelfutbol.com',
+    phone: '5493757402211',
+    categories: ['2014', '2015'],
+    enabled: true
+  },
+  {
+    id: 'profe-2',
+    name: 'Camila Sosa',
+    email: 'camila.profe@quevivaelfutbol.com',
+    phone: '5493757406699',
+    categories: ['Escuelita (4-6 años)', 'Escuelita (7-9 años)'],
+    enabled: false
+  }
+];
+
 const INITIAL_STUDENTS = [
-  { id: 'stu-1', name: 'Mateo González', age: 9, category: 'Sub-10', guardian: 'Carlos González', phone: '5493757401122', feeStatus: 'paid', monthlyFee: 18000, lastPayment: '2026-11-05' },
-  { id: 'stu-2', name: 'Thiago Fernández', age: 11, category: 'Sub-12', guardian: 'Laura Méndez', phone: '5493757403344', feeStatus: 'pending', monthlyFee: 18000, lastPayment: '2026-10-08' },
-  { id: 'stu-3', name: 'Bautista Rojas', age: 7, category: 'Sub-8', guardian: 'Martín Rojas', phone: '5493757405566', feeStatus: 'paid', monthlyFee: 16000, lastPayment: '2026-11-03' },
-  { id: 'stu-4', name: 'Santino Benítez', age: 13, category: 'Sub-14', guardian: 'Silvia Gómez', phone: '5493757407788', feeStatus: 'overdue', monthlyFee: 20000, lastPayment: '2026-09-12' },
-  { id: 'stu-5', name: 'Lucas Villalba', age: 10, category: 'Sub-10', guardian: 'Diego Villalba', phone: '5493757409900', feeStatus: 'paid', monthlyFee: 18000, lastPayment: '2026-11-07' }
+  { id: 'stu-1', name: 'Mateo González', group: 'Competencia', category: '2016', guardian: 'Carlos González', phone: '5493757401122', feeStatus: 'paid', monthlyFee: 18000, lastPayment: '2026-11-05' },
+  { id: 'stu-2', name: 'Thiago Fernández', group: 'Competencia', category: '2014', guardian: 'Laura Méndez', phone: '5493757403344', feeStatus: 'pending', monthlyFee: 18000, lastPayment: '2026-10-08' },
+  { id: 'stu-3', name: 'Bautista Rojas', group: 'Escuelita', category: 'Escuelita (7-9 años)', guardian: 'Martín Rojas', phone: '5493757405566', feeStatus: 'paid', monthlyFee: 16000, lastPayment: '2026-11-03' },
+  { id: 'stu-4', name: 'Santino Benítez', group: 'Competencia', category: '2018', guardian: 'Silvia Gómez', phone: '5493757407788', feeStatus: 'overdue', monthlyFee: 20000, lastPayment: '2026-09-12' },
+  { id: 'stu-5', name: 'Lucas Villalba', group: 'Escuelita', category: 'Escuelita (4-6 años)', guardian: 'Diego Villalba', phone: '5493757409900', feeStatus: 'paid', monthlyFee: 16000, lastPayment: '2026-11-07' }
 ];
 
 const INITIAL_TRANSACTIONS = [
   { id: 'tx-1', date: '2026-11-05', concept: 'Cuota Noviembre - Mateo González', category: 'Cuotas', type: 'income', amount: 18000 },
   { id: 'tx-2', date: '2026-11-03', concept: 'Cuota Noviembre - Bautista Rojas', category: 'Cuotas', type: 'income', amount: 16000 },
-  { id: 'tx-3', date: '2026-11-07', concept: 'Cuota Noviembre - Lucas Villalba', category: 'Cuotas', type: 'income', amount: 18000 },
+  { id: 'tx-3', date: '2026-11-07', concept: 'Cuota Noviembre - Lucas Villalba', category: 'Cuotas', type: 'income', amount: 16000 },
   { id: 'tx-4', date: '2026-11-08', concept: 'Compra de 4 pelotas N°4 y conos', category: 'Equipamiento', type: 'expense', amount: 24000 },
   { id: 'tx-5', date: '2026-11-10', concept: 'Alquiler horario cancha auxiliar', category: 'Cancha', type: 'expense', amount: 15000 }
 ];
@@ -69,39 +116,51 @@ export default function App() {
     const saved = localStorage.getItem('qvf_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [email, setEmail] = useState('profebeto@quevivaelfutbol.com');
+  const [email, setEmail] = useState('beto@quevivaelfutbol.com');
   const [password, setPassword] = useState('********');
   const [loginError, setLoginError] = useState('');
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [coaches, setCoaches] = useState(() => {
+    const saved = localStorage.getItem('qvf_coaches');
+    return saved ? JSON.parse(saved) : INITIAL_COACHES;
+  });
+
   const [students, setStudents] = useState(() => {
     const saved = localStorage.getItem('qvf_students');
     return saved ? JSON.parse(saved) : INITIAL_STUDENTS;
   });
+
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('qvf_transactions');
     return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
   });
+
   const [attendanceByDate, setAttendanceByDate] = useState(() => {
     const saved = localStorage.getItem('qvf_attendance');
     return saved ? JSON.parse(saved) : {};
   });
 
+  const isAdmin = user?.role === 'admin';
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'dashboard' : 'attendance');
+
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [selectedCategory, setSelectedCategory] = useState('Todas');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState('Todos');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('Noviembre 2026');
 
+  // Modal nuevo jugador
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [newStudent, setNewStudent] = useState({
+    group: 'Competencia',
+    category: '2016',
     name: '',
-    age: '',
-    category: 'Sub-10',
     guardian: '',
     phone: '',
     monthlyFee: 18000
   });
 
+  // Modal nuevo movimiento de caja
   const [showTxModal, setShowTxModal] = useState(false);
   const [newTx, setNewTx] = useState({
     concept: '',
@@ -110,12 +169,25 @@ export default function App() {
     amount: ''
   });
 
-  const [toast, setToast] = useState('');
+  // Modal nuevo profe
+  const [showCoachModal, setShowCoachModal] = useState(false);
+  const [newCoach, setNewCoach] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    categories: ['2016'],
+    enabled: false
+  });
 
+  const [toast, setToast] = useState('');
   const notify = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
   };
+
+  useEffect(() => {
+    localStorage.setItem('qvf_coaches', JSON.stringify(coaches));
+  }, [coaches]);
 
   useEffect(() => {
     localStorage.setItem('qvf_students', JSON.stringify(students));
@@ -134,9 +206,10 @@ export default function App() {
     const fetchAwsData = async () => {
       try {
         const headers = { Authorization: `Bearer ${user.token || ''}` };
-        const [stuRes, txRes] = await Promise.all([
+        const [stuRes, txRes, coachRes] = await Promise.all([
           fetch(`${API_URL}/students`, { headers }),
-          fetch(`${API_URL}/transactions`, { headers })
+          fetch(`${API_URL}/transactions`, { headers }),
+          fetch(`${API_URL}/coaches`, { headers })
         ]);
         if (stuRes.ok) {
           const stuData = await stuRes.json();
@@ -145,6 +218,10 @@ export default function App() {
         if (txRes.ok) {
           const txData = await txRes.json();
           if (Array.isArray(txData) && txData.length > 0) setTransactions(txData);
+        }
+        if (coachRes.ok) {
+          const coachData = await coachRes.json();
+          if (Array.isArray(coachData) && coachData.length > 0) setCoaches(coachData);
         }
       } catch (err) {
         console.warn('Usando almacenamiento local:', err);
@@ -155,18 +232,50 @@ export default function App() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password.trim()) {
       setLoginError('Completá tu correo y contraseña.');
       return;
     }
-    const sessionUser = {
-      name: 'Profe Beto',
-      email,
-      role: 'Director Técnico',
-      token: 'session-token'
+
+    // 1. Verificar si es uno de los dos administradores
+    const foundAdmin = ADMINS.find((a) => a.email.toLowerCase() === cleanEmail);
+    if (foundAdmin) {
+      const sessionUser = {
+        name: foundAdmin.name,
+        email: foundAdmin.email,
+        role: 'admin',
+        categories: ALL_CATEGORIES,
+        token: 'admin-session-token'
+      };
+      setUser(sessionUser);
+      setActiveTab('dashboard');
+      localStorage.setItem('qvf_user', JSON.stringify(sessionUser));
+      setLoginError('');
+      return;
+    }
+
+    // 2. Verificar si es un profe registrado y habilitado por un admin
+    const foundCoach = coaches.find((c) => c.email.toLowerCase() === cleanEmail);
+    if (!foundCoach) {
+      setLoginError('Este correo no está registrado en la escuela.');
+      return;
+    }
+    if (!foundCoach.enabled) {
+      setLoginError('Tu cuenta de profe todavía no fue habilitada por un administrador.');
+      return;
+    }
+
+    const sessionCoach = {
+      name: foundCoach.name,
+      email: foundCoach.email,
+      role: 'profe',
+      categories: foundCoach.categories || [],
+      token: 'profe-session-token'
     };
-    setUser(sessionUser);
-    localStorage.setItem('qvf_user', JSON.stringify(sessionUser));
+    setUser(sessionCoach);
+    setActiveTab('attendance');
+    localStorage.setItem('qvf_user', JSON.stringify(sessionCoach));
     setLoginError('');
   };
 
@@ -175,14 +284,45 @@ export default function App() {
     localStorage.removeItem('qvf_user');
   };
 
+  // Si es profe, solo ve las categorías asignadas a él
+  const allowedCategories = useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'admin') return ALL_CATEGORIES;
+    return user.categories || [];
+  }, [user]);
+
+  // Alumnos visibles según rol y filtros
+  const visibleStudents = useMemo(() => {
+    return students.filter((s) => {
+      if (user?.role === 'profe' && !allowedCategories.includes(s.category)) {
+        return false;
+      }
+      const matchesGroup = selectedGroupFilter === 'Todos' || s.group === selectedGroupFilter;
+      const matchesCat = selectedCategoryFilter === 'Todas' || s.category === selectedCategoryFilter;
+      const matchesSearch =
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.guardian.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesGroup && matchesCat && matchesSearch;
+    });
+  }, [students, user, allowedCategories, selectedGroupFilter, selectedCategoryFilter, searchTerm]);
+
+  const handleGroupChangeInModal = (newGroup) => {
+    setNewStudent({
+      ...newStudent,
+      group: newGroup,
+      category: newGroup === 'Competencia' ? '2016' : 'Escuelita (7-9 años)',
+      monthlyFee: newGroup === 'Competencia' ? 18000 : 16000
+    });
+  };
+
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newStudent.name.trim()) return;
     const created = {
       id: `stu-${Date.now()}`,
-      name: newStudent.name.trim(),
-      age: Number(newStudent.age) || 10,
+      group: newStudent.group,
       category: newStudent.category,
+      name: newStudent.name.trim(),
       guardian: newStudent.guardian.trim() || 'Sin especificar',
       phone: newStudent.phone.trim(),
       feeStatus: 'pending',
@@ -190,9 +330,16 @@ export default function App() {
       lastPayment: '-'
     };
     setStudents((prev) => [created, ...prev]);
-    setNewStudent({ name: '', age: '', category: 'Sub-10', guardian: '', phone: '', monthlyFee: 18000 });
+    setNewStudent({
+      group: 'Competencia',
+      category: '2016',
+      name: '',
+      guardian: '',
+      phone: '',
+      monthlyFee: 18000
+    });
     setShowStudentModal(false);
-    notify(`Alumno ${created.name} registrado`);
+    notify(`Jugador ${created.name} registrado en ${created.category}`);
 
     if (API_URL) {
       await fetch(`${API_URL}/students`, {
@@ -205,9 +352,73 @@ export default function App() {
 
   const handleDeleteStudent = async (id) => {
     setStudents((prev) => prev.filter((s) => s.id !== id));
-    notify('Alumno eliminado');
+    notify('Jugador eliminado');
     if (API_URL) {
       await fetch(`${API_URL}/students?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${user?.token || ''}` }
+      }).catch(() => {});
+    }
+  };
+
+  const toggleNewCoachCategory = (cat) => {
+    setNewCoach((prev) => {
+      const exists = prev.categories.includes(cat);
+      return {
+        ...prev,
+        categories: exists ? prev.categories.filter((c) => c !== cat) : [...prev.categories, cat]
+      };
+    });
+  };
+
+  const handleAddCoach = async (e) => {
+    e.preventDefault();
+    if (!newCoach.name.trim() || !newCoach.email.trim()) return;
+    const createdCoach = {
+      id: `profe-${Date.now()}`,
+      name: newCoach.name.trim(),
+      email: newCoach.email.trim().toLowerCase(),
+      phone: newCoach.phone.trim(),
+      categories: newCoach.categories.length > 0 ? newCoach.categories : ['2016'],
+      enabled: Boolean(newCoach.enabled)
+    };
+    setCoaches((prev) => [createdCoach, ...prev]);
+    setNewCoach({ name: '', email: '', phone: '', categories: ['2016'], enabled: false });
+    setShowCoachModal(false);
+    notify(`Profe ${createdCoach.name} agregado`);
+
+    if (API_URL) {
+      await fetch(`${API_URL}/coaches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token || ''}` },
+        body: JSON.stringify(createdCoach)
+      }).catch(() => {});
+    }
+  };
+
+  const handleToggleCoachAccess = async (coach) => {
+    const updated = { ...coach, enabled: !coach.enabled };
+    setCoaches((prev) => prev.map((c) => (c.id === coach.id ? updated : c)));
+    notify(
+      updated.enabled
+        ? `Acceso habilitado para ${coach.name}`
+        : `Acceso suspendido para ${coach.name}`
+    );
+
+    if (API_URL) {
+      await fetch(`${API_URL}/coaches`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token || ''}` },
+        body: JSON.stringify(updated)
+      }).catch(() => {});
+    }
+  };
+
+  const handleDeleteCoach = async (id) => {
+    setCoaches((prev) => prev.filter((c) => c.id !== id));
+    notify('Profe eliminado');
+    if (API_URL) {
+      await fetch(`${API_URL}/coaches?id=${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${user?.token || ''}` }
       }).catch(() => {});
@@ -222,7 +433,7 @@ export default function App() {
     const newIncome = {
       id: `tx-${Date.now()}`,
       date: today,
-      concept: `Cuota ${selectedMonth} - ${student.name}`,
+      concept: `Cuota ${selectedMonth} - ${student.name} (${student.category})`,
       category: 'Cuotas',
       type: 'income',
       amount: Number(student.monthlyFee)
@@ -262,11 +473,11 @@ export default function App() {
 
   const handleMarkAllPresent = async () => {
     const updatedDay = { ...(attendanceByDate[selectedDate] || {}) };
-    filteredStudents.forEach((s) => {
+    visibleStudents.forEach((s) => {
       updatedDay[s.id] = 'present';
     });
     setAttendanceByDate((prev) => ({ ...prev, [selectedDate]: updatedDay }));
-    notify('Todos marcados como presentes');
+    notify('Todos los jugadores visibles marcados como presentes');
 
     if (API_URL) {
       await fetch(`${API_URL}/attendance`, {
@@ -308,7 +519,9 @@ export default function App() {
     const balance = totalIncome - totalExpense;
     const paidCount = students.filter((s) => s.feeStatus === 'paid').length;
     const pendingCount = students.filter((s) => s.feeStatus !== 'paid').length;
-    return { totalIncome, totalExpense, balance, paidCount, pendingCount };
+    const competenciaCount = students.filter((s) => s.group === 'Competencia').length;
+    const escuelitaCount = students.filter((s) => s.group === 'Escuelita').length;
+    return { totalIncome, totalExpense, balance, paidCount, pendingCount, competenciaCount, escuelitaCount };
   }, [students, transactions]);
 
   const chartData = [
@@ -317,18 +530,10 @@ export default function App() {
     { name: 'Noviembre', Ingresos: metrics.totalIncome, Egresos: metrics.totalExpense }
   ];
 
-  const filteredStudents = students.filter((s) => {
-    const matchesCat = selectedCategory === 'Todas' || s.category === selectedCategory;
-    const matchesSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.guardian.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCat && matchesSearch;
-  });
-
   const sendWhatsAppReminder = (student) => {
     const cleanPhone = (student.phone || '').replace(/\D/g, '');
     const msg = encodeURIComponent(
-      `Hola ${student.guardian}! Te escribimos de la Escuela de Fútbol "Que Viva el Fútbol" (Profe Beto) para recordarte la cuota de ${selectedMonth} de ${student.name} ($${student.monthlyFee.toLocaleString('es-AR')}). ¡Muchas gracias!`
+      `Hola ${student.guardian}! Te escribimos de la Escuela de Fútbol "Que Viva el Fútbol" (Profe Beto) para recordarte la cuota de ${selectedMonth} de ${student.name} (${student.category} - $${student.monthlyFee.toLocaleString('es-AR')}). ¡Muchas gracias!`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
   };
@@ -340,7 +545,7 @@ export default function App() {
           <div className="flex flex-col items-center text-center mb-6">
             <SchoolCrest className="w-24 h-24 mb-3" />
             <h1 className="text-2xl font-bold text-[#0F1E36]">Que Viva el Fútbol</h1>
-            <p className="text-sm text-slate-500 font-medium">Gestión Deportiva • Profe Beto</p>
+            <p className="text-sm text-slate-500 font-medium">Escuela de Fútbol • Profe Beto</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -351,7 +556,7 @@ export default function App() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
-                placeholder="profebeto@quevivaelfutbol.com"
+                placeholder="tu-correo@ejemplo.com"
               />
             </div>
             <div>
@@ -364,7 +569,7 @@ export default function App() {
                 placeholder="••••••••"
               />
             </div>
-            {loginError && <p className="text-red-600 text-sm">{loginError}</p>}
+            {loginError && <p className="text-red-600 text-sm font-medium">{loginError}</p>}
             <button
               type="submit"
               className="w-full bg-[#10B981] hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition shadow-md"
@@ -376,6 +581,17 @@ export default function App() {
       </div>
     );
   }
+
+  const navItems = isAdmin
+    ? [
+        { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
+        { id: 'students', label: 'Jugadores', icon: Users },
+        { id: 'attendance', label: 'Asistencias', icon: CalendarCheck },
+        { id: 'fees', label: 'Cuotas Mensuales', icon: CreditCard },
+        { id: 'balance', label: 'Balance y Caja', icon: Wallet },
+        { id: 'coaches', label: 'Profes', icon: UserCog }
+      ]
+    : [{ id: 'attendance', label: 'Asistencias', icon: CalendarCheck }];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -397,13 +613,7 @@ export default function App() {
           </div>
 
           <nav className="mt-6 space-y-1.5">
-            {[
-              { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
-              { id: 'students', label: 'Jugadores', icon: Users },
-              { id: 'attendance', label: 'Asistencias', icon: CalendarCheck },
-              { id: 'fees', label: 'Cuotas Mensuales', icon: CreditCard },
-              { id: 'balance', label: 'Balance y Caja', icon: Wallet }
-            ].map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
               return (
@@ -426,7 +636,9 @@ export default function App() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold">{user.name}</p>
-              <p className="text-xs text-slate-400">{user.role}</p>
+              <p className="text-xs text-slate-400">
+                {isAdmin ? 'Administrador' : `Profe • ${allowedCategories.join(', ')}`}
+              </p>
             </div>
             <button
               onClick={handleLogout}
@@ -440,12 +652,12 @@ export default function App() {
       </aside>
 
       <main className="flex-1 p-5 md:p-8 max-w-7xl mx-auto w-full">
-        {activeTab === 'dashboard' && (
+        {isAdmin && activeTab === 'dashboard' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-[#0F1E36]">¡Hola, Profe Beto!</h1>
-                <p className="text-slate-500 text-sm">Resumen general de la escuela de fútbol</p>
+                <h1 className="text-2xl font-bold text-[#0F1E36]">¡Hola, {user.name}!</h1>
+                <p className="text-slate-500 text-sm">Resumen de Competencia (2014–2019) y Escuelita (4–12 años)</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -472,7 +684,9 @@ export default function App() {
                   <Users className="w-5 h-5 text-[#0F1E36]" />
                 </div>
                 <p className="text-3xl font-bold text-[#0F1E36]">{students.length}</p>
-                <p className="text-xs text-emerald-600 font-medium mt-1">4 categorías habilitadas</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Competencia: {metrics.competenciaCount} • Escuelita: {metrics.escuelitaCount}
+                </p>
               </div>
 
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
@@ -537,7 +751,9 @@ export default function App() {
                         <div key={s.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                           <div>
                             <p className="font-semibold text-sm text-[#0F1E36]">{s.name}</p>
-                            <p className="text-xs text-slate-500">{s.category} • ${s.monthlyFee.toLocaleString('es-AR')}</p>
+                            <p className="text-xs text-slate-500">
+                              {s.group} • {s.category} • ${s.monthlyFee.toLocaleString('es-AR')}
+                            </p>
                           </div>
                           <button
                             onClick={() => handleMarkPaid(s)}
@@ -554,12 +770,12 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'students' && (
+        {isAdmin && activeTab === 'students' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-[#0F1E36]">Plantel de Jugadores</h1>
-                <p className="text-sm text-slate-500">Administración de fichas, categorías y tutores</p>
+                <p className="text-sm text-slate-500">Competencia (2014–2019) y Escuelita (4 a 12 años)</p>
               </div>
               <button
                 onClick={() => setShowStudentModal(true)}
@@ -582,15 +798,28 @@ export default function App() {
                 />
               </div>
               <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                value={selectedGroupFilter}
+                onChange={(e) => {
+                  setSelectedGroupFilter(e.target.value);
+                  setSelectedCategoryFilter('Todas');
+                }}
+                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
+              >
+                <option value="Todos">Todos los grupos</option>
+                <option value="Competencia">Competencia (2014–2019)</option>
+                <option value="Escuelita">Escuelita (4–12 años)</option>
+              </select>
+              <select
+                value={selectedCategoryFilter}
+                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
                 className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700"
               >
                 <option value="Todas">Todas las categorías</option>
-                <option value="Sub-8">Sub-8</option>
-                <option value="Sub-10">Sub-10</option>
-                <option value="Sub-12">Sub-12</option>
-                <option value="Sub-14">Sub-14</option>
+                {ALL_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -599,7 +828,7 @@ export default function App() {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500">
                     <th className="py-3.5 px-4">Jugador</th>
-                    <th className="py-3.5 px-4">Categoría</th>
+                    <th className="py-3.5 px-4">Grupo / Categoría</th>
                     <th className="py-3.5 px-4">Tutor / Contacto</th>
                     <th className="py-3.5 px-4">Cuota</th>
                     <th className="py-3.5 px-4">Estado</th>
@@ -607,15 +836,12 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredStudents.map((s) => (
+                  {visibleStudents.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50">
-                      <td className="py-3.5 px-4 font-semibold text-[#0F1E36]">
-                        {s.name}
-                        <span className="block text-xs font-normal text-slate-400">{s.age} años</span>
-                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-[#0F1E36]">{s.name}</td>
                       <td className="py-3.5 px-4">
                         <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#0F1E36] text-[#C5A869]">
-                          {s.category}
+                          {s.group} • {s.category}
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
@@ -667,9 +893,27 @@ export default function App() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-[#0F1E36]">Control de Asistencias</h1>
-                <p className="text-sm text-slate-500">Marcá presentes, ausentes o llegadas tarde en entrenamiento</p>
+                <p className="text-sm text-slate-500">
+                  {isAdmin
+                    ? 'Marcá asistencias de todas las categorías'
+                    : `Categorías a tu cargo: ${allowedCategories.join(', ')}`}
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  className="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-[#0F1E36]"
+                >
+                  <option value="Todas">
+                    {isAdmin ? 'Todas las categorías' : 'Todas mis categorías'}
+                  </option>
+                  {allowedCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="date"
                   value={selectedDate}
@@ -687,7 +931,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredStudents.map((s) => {
+              {visibleStudents.map((s) => {
                 const status = attendanceByDate[selectedDate]?.[s.id] || 'unmarked';
                 return (
                   <div
@@ -696,7 +940,9 @@ export default function App() {
                   >
                     <div>
                       <p className="font-bold text-[#0F1E36]">{s.name}</p>
-                      <p className="text-xs text-slate-500">{s.category} • Tutor: {s.guardian}</p>
+                      <p className="text-xs text-slate-500">
+                        {s.group} • {s.category}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -740,7 +986,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'fees' && (
+        {isAdmin && activeTab === 'fees' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -765,7 +1011,9 @@ export default function App() {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <h3 className="font-bold text-[#0F1E36]">{s.name}</h3>
-                        <p className="text-xs text-slate-500">{s.category} • {s.guardian}</p>
+                        <p className="text-xs text-slate-500">
+                          {s.group} • {s.category} • {s.guardian}
+                        </p>
                       </div>
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -815,7 +1063,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'balance' && (
+        {isAdmin && activeTab === 'balance' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -886,6 +1134,103 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {isAdmin && activeTab === 'coaches' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-[#0F1E36]">Profes y Permisos</h1>
+                <p className="text-sm text-slate-500">
+                  Asigná categorías y habilitá el acceso para que cada profe tome asistencia
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCoachModal(true)}
+                className="bg-[#10B981] hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 self-start"
+              >
+                <Plus className="w-4 h-4" />
+                Agregar Profe
+              </button>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 text-sm text-slate-600">
+              <strong className="text-[#0F1E36]">Administradores con acceso total:</strong>{' '}
+              {ADMINS.map((a) => `${a.name} (${a.email})`).join(' • ')}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {coaches.map((coach) => (
+                <div
+                  key={coach.id}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between gap-4"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-bold text-[#0F1E36] text-base">{coach.name}</h3>
+                        <p className="text-xs text-slate-500">{coach.email}</p>
+                        {coach.phone && <p className="text-xs text-slate-400 mt-0.5">{coach.phone}</p>}
+                      </div>
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          coach.enabled
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {coach.enabled ? 'Habilitado' : 'Pendiente de habilitar'}
+                      </span>
+                    </div>
+
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold text-slate-500 mb-1.5">Categorías asignadas:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {coach.categories.map((cat) => (
+                          <span
+                            key={cat}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-[#0F1E36]"
+                          >
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => handleToggleCoachAccess(coach)}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                        coach.enabled
+                          ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          : 'bg-[#10B981] text-white hover:bg-emerald-600'
+                      }`}
+                    >
+                      {coach.enabled ? (
+                        <>
+                          <Lock className="w-4 h-4" />
+                          Quitar Acceso
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-4 h-4" />
+                          Habilitar Acceso
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCoach(coach.id)}
+                      title="Eliminar profe"
+                      className="p-2 rounded-xl text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {showStudentModal && (
@@ -893,6 +1238,37 @@ export default function App() {
           <div className="bg-white rounded-2xl max-w-md w-full p-6">
             <h2 className="text-lg font-bold text-[#0F1E36] mb-4">Registrar Nuevo Jugador</h2>
             <form onSubmit={handleAddStudent} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Grupo</label>
+                <select
+                  value={newStudent.group}
+                  onChange={(e) => handleGroupChangeInModal(e.target.value)}
+                  className="w-full px-3.5 py-2 border rounded-xl text-sm font-semibold"
+                >
+                  <option value="Competencia">Competencia (2014 al 2019)</option>
+                  <option value="Escuelita">Escuelita (4 a 12 años)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  {newStudent.group === 'Competencia' ? 'Año de nacimiento' : 'Categoría Escuelita'}
+                </label>
+                <select
+                  value={newStudent.category}
+                  onChange={(e) => setNewStudent({ ...newStudent, category: e.target.value })}
+                  className="w-full px-3.5 py-2 border rounded-xl text-sm"
+                >
+                  {(newStudent.group === 'Competencia' ? COMPETITION_YEARS : ESCUELITA_CATEGORIES).map(
+                    (cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
               <input
                 type="text"
                 required
@@ -901,25 +1277,6 @@ export default function App() {
                 onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })}
                 className="w-full px-3.5 py-2 border rounded-xl text-sm"
               />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  placeholder="Edad"
-                  value={newStudent.age}
-                  onChange={(e) => setNewStudent({ ...newStudent, age: e.target.value })}
-                  className="w-full px-3.5 py-2 border rounded-xl text-sm"
-                />
-                <select
-                  value={newStudent.category}
-                  onChange={(e) => setNewStudent({ ...newStudent, category: e.target.value })}
-                  className="w-full px-3.5 py-2 border rounded-xl text-sm"
-                >
-                  <option value="Sub-8">Sub-8</option>
-                  <option value="Sub-10">Sub-10</option>
-                  <option value="Sub-12">Sub-12</option>
-                  <option value="Sub-14">Sub-14</option>
-                </select>
-              </div>
               <input
                 type="text"
                 placeholder="Nombre del padre / tutor"
@@ -954,6 +1311,83 @@ export default function App() {
                   className="px-4 py-2 bg-[#10B981] text-white rounded-xl text-sm font-bold"
                 >
                   Guardar Jugador
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showCoachModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <h2 className="text-lg font-bold text-[#0F1E36] mb-4">Agregar Nuevo Profe</h2>
+            <form onSubmit={handleAddCoach} className="space-y-3">
+              <input
+                type="text"
+                required
+                placeholder="Nombre y apellido del profe"
+                value={newCoach.name}
+                onChange={(e) => setNewCoach({ ...newCoach, name: e.target.value })}
+                className="w-full px-3.5 py-2 border rounded-xl text-sm"
+              />
+              <input
+                type="email"
+                required
+                placeholder="Correo electrónico del profe"
+                value={newCoach.email}
+                onChange={(e) => setNewCoach({ ...newCoach, email: e.target.value })}
+                className="w-full px-3.5 py-2 border rounded-xl text-sm"
+              />
+              <input
+                type="text"
+                placeholder="Teléfono / WhatsApp"
+                value={newCoach.phone}
+                onChange={(e) => setNewCoach({ ...newCoach, phone: e.target.value })}
+                className="w-full px-3.5 py-2 border rounded-xl text-sm"
+              />
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-1.5">
+                  Categorías a cargo (podés elegir una o más):
+                </p>
+                <div className="max-h-40 overflow-y-auto border rounded-xl p-2.5 space-y-1.5">
+                  {ALL_CATEGORIES.map((cat) => (
+                    <label key={cat} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newCoach.categories.includes(cat)}
+                        onChange={() => toggleNewCoachCategory(cat)}
+                        className="rounded text-[#10B981]"
+                      />
+                      <span>{cat}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700 pt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newCoach.enabled}
+                  onChange={(e) => setNewCoach({ ...newCoach, enabled: e.target.checked })}
+                />
+                <span>Habilitar acceso de inmediato (si queda desmarcado, lo habilitás luego)</span>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCoachModal(false)}
+                  className="px-4 py-2 text-sm text-slate-600"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#10B981] text-white rounded-xl text-sm font-bold"
+                >
+                  Guardar Profe
                 </button>
               </div>
             </form>
