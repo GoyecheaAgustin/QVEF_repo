@@ -31,7 +31,6 @@ export const handler = async (event) => {
   }
 
   try {
-    // ALUMNOS (/students)
     if (path.includes("/students")) {
       if (method === "GET") {
         const res = await docClient.send(new ScanCommand({ TableName: TABLES.students }));
@@ -50,7 +49,6 @@ export const handler = async (event) => {
       }
     }
 
-    // ASISTENCIAS (/attendance)
     if (path.includes("/attendance")) {
       if (method === "GET") {
         const date = event.queryStringParameters?.date;
@@ -74,7 +72,6 @@ export const handler = async (event) => {
       }
     }
 
-    // CAJA / TRANSACCIONES (/transactions)
     if (path.includes("/transactions")) {
       if (method === "GET") {
         const res = await docClient.send(new ScanCommand({ TableName: TABLES.transactions }));

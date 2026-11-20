@@ -12,7 +12,6 @@ import {
   Clock,
   LogOut,
   TrendingUp,
-  TrendingDown,
   Phone,
   Trash2,
   Check,
