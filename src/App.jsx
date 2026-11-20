@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  CognitoUserPool,
+  CognitoUser,
+  AuthenticationDetails
+} from 'amazon-cognito-identity-js';
+import {
   Users,
   CalendarCheck,
   Wallet,
@@ -22,7 +27,9 @@ import {
   DollarSign,
   UserCog,
   Lock,
-  Unlock
+  Unlock,
+  KeyRound,
+  ArrowLeft
 } from 'lucide-react';
 import {
   BarChart,
@@ -35,8 +42,18 @@ import {
 } from 'recharts';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
+const USER_POOL_ID = import.meta.env.VITE_COGNITO_USER_POOL_ID || '';
+const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID || '';
 
-// Dos administradores con acceso total a todas las funciones
+const cognitoPool =
+  USER_POOL_ID && CLIENT_ID
+    ? new CognitoUserPool({
+        UserPoolId: USER_POOL_ID,
+        ClientId: CLIENT_ID
+      })
+    : null;
+
+// Reemplazá estos correos por tu correo personal y el correo personal de Beto
 const ADMINS = [
   {
     name: 'Beto (Profe Beto)',
@@ -51,8 +68,8 @@ const ADMINS = [
 ];
 
 // Grupos y categorías de chicos:
-// 1. Competencia: año de nacimiento del 2014 al 2019
-// 2. Escuelita: chicos de 4 a 12 años
+// Competencia: año de nacimiento del 2014 al 2019
+// Escuelita: chicos de 4 a 12 años
 const COMPETITION_YEARS = ['2014', '2015', '2016', '2017', '2018', '2019'];
 const ESCUELITA_CATEGORIES = [
   'Escuelita (4-6 años)',
@@ -116,9 +133,17 @@ export default function App() {
     const saved = localStorage.getItem('qvf_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [email, setEmail] = useState('beto@quevivaelfutbol.com');
-  const [password, setPassword] = useState('********');
-  const [loginError, setLoginError] = useState('');
+
+  // Modos del formulario de acceso: 'login' | 'new_password' | 'forgot_request' | 'forgot_confirm'
+  const [authView, setAuthView] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [pendingCognitoUser, setPendingCognitoUser] = useState(null);
+  const [authMessage, setAuthMessage] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [coaches, setCoaches] = useState(() => {
     const saved = localStorage.getItem('qvf_coaches');
@@ -149,7 +174,6 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('Noviembre 2026');
 
-  // Modal nuevo jugador
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [newStudent, setNewStudent] = useState({
     group: 'Competencia',
@@ -160,7 +184,6 @@ export default function App() {
     monthlyFee: 18000
   });
 
-  // Modal nuevo movimiento de caja
   const [showTxModal, setShowTxModal] = useState(false);
   const [newTx, setNewTx] = useState({
     concept: '',
@@ -169,7 +192,6 @@ export default function App() {
     amount: ''
   });
 
-  // Modal nuevo profe
   const [showCoachModal, setShowCoachModal] = useState(false);
   const [newCoach, setNewCoach] = useState({
     name: '',
@@ -230,68 +252,196 @@ export default function App() {
     fetchAwsData();
   }, [user]);
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !password.trim()) {
-      setLoginError('Completá tu correo y contraseña.');
-      return;
-    }
-
-    // 1. Verificar si es uno de los dos administradores
-    const foundAdmin = ADMINS.find((a) => a.email.toLowerCase() === cleanEmail);
-    if (foundAdmin) {
+  const completeSessionForEmail = (cleanEmail, jwtToken = '') => {
+    const adminMatch = ADMINS.find((a) => a.email.toLowerCase() === cleanEmail);
+    if (adminMatch) {
       const sessionUser = {
-        name: foundAdmin.name,
-        email: foundAdmin.email,
+        name: adminMatch.name,
+        email: adminMatch.email,
         role: 'admin',
         categories: ALL_CATEGORIES,
-        token: 'admin-session-token'
+        token: jwtToken || 'admin-session-token'
       };
       setUser(sessionUser);
       setActiveTab('dashboard');
       localStorage.setItem('qvf_user', JSON.stringify(sessionUser));
-      setLoginError('');
       return;
     }
 
-    // 2. Verificar si es un profe registrado y habilitado por un admin
-    const foundCoach = coaches.find((c) => c.email.toLowerCase() === cleanEmail);
-    if (!foundCoach) {
-      setLoginError('Este correo no está registrado en la escuela.');
-      return;
-    }
-    if (!foundCoach.enabled) {
-      setLoginError('Tu cuenta de profe todavía no fue habilitada por un administrador.');
+    const coachMatch = coaches.find((c) => c.email.toLowerCase() === cleanEmail);
+    if (coachMatch && !coachMatch.enabled) {
+      setAuthError('Tu cuenta de profe todavía no fue habilitada por un administrador.');
       return;
     }
 
     const sessionCoach = {
-      name: foundCoach.name,
-      email: foundCoach.email,
+      name: coachMatch?.name || 'Profe',
+      email: cleanEmail,
       role: 'profe',
-      categories: foundCoach.categories || [],
-      token: 'profe-session-token'
+      categories: coachMatch?.categories || ALL_CATEGORIES,
+      token: jwtToken || 'profe-session-token'
     };
     setUser(sessionCoach);
     setActiveTab('attendance');
     localStorage.setItem('qvf_user', JSON.stringify(sessionCoach));
-    setLoginError('');
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    setAuthError('');
+    setAuthMessage('');
+
+    if (!cleanEmail || !password.trim()) {
+      setAuthError('Completá tu correo y contraseña.');
+      return;
+    }
+
+    // Modo local previo a configurar Cognito en AWS
+    if (!cognitoPool) {
+      const adminMatch = ADMINS.find((a) => a.email.toLowerCase() === cleanEmail);
+      if (adminMatch) {
+        completeSessionForEmail(cleanEmail);
+        return;
+      }
+      const coachMatch = coaches.find((c) => c.email.toLowerCase() === cleanEmail);
+      if (!coachMatch) {
+        setAuthError('Este correo no está registrado.');
+        return;
+      }
+      if (!coachMatch.enabled) {
+        setAuthError('Tu cuenta de profe todavía no fue habilitada por un administrador.');
+        return;
+      }
+      completeSessionForEmail(cleanEmail);
+      return;
+    }
+
+    // Autenticación real con Amazon Cognito
+    setAuthLoading(true);
+    const cognitoUser = new CognitoUser({ Username: cleanEmail, Pool: cognitoPool });
+    const authDetails = new AuthenticationDetails({ Username: cleanEmail, Password: password });
+
+    cognitoUser.authenticateUser(authDetails, {
+      onSuccess: (session) => {
+        setAuthLoading(false);
+        const token = session.getIdToken().getJwtToken();
+        completeSessionForEmail(cleanEmail, token);
+      },
+      onFailure: (err) => {
+        setAuthLoading(false);
+        if (err.code === 'UserNotConfirmedException') {
+          setAuthError('Tu cuenta está pendiente de confirmación o habilitación.');
+        } else if (err.code === 'NotAuthorizedException') {
+          setAuthError('Correo o contraseña incorrectos, o cuenta deshabilitada.');
+        } else if (err.code === 'UserNotFoundException') {
+          setAuthError('No existe un usuario registrado con ese correo.');
+        } else {
+          setAuthError(err.message || 'No se pudo iniciar sesión.');
+        }
+      },
+      newPasswordRequired: () => {
+        setAuthLoading(false);
+        setPendingCognitoUser(cognitoUser);
+        setAuthView('new_password');
+        setAuthMessage('Ingresaste con tu contraseña temporal. Creá tu nueva contraseña para continuar.');
+      }
+    });
+  };
+
+  const handleSetNewPassword = (e) => {
+    e.preventDefault();
+    if (!pendingCognitoUser || !newPassword.trim()) {
+      setAuthError('Ingresá una nueva contraseña válida.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    pendingCognitoUser.completeNewPasswordChallenge(newPassword, {}, {
+      onSuccess: (session) => {
+        setAuthLoading(false);
+        const token = session.getIdToken().getJwtToken();
+        setNewPassword('');
+        setPendingCognitoUser(null);
+        setAuthView('login');
+        completeSessionForEmail(email.trim().toLowerCase(), token);
+      },
+      onFailure: (err) => {
+        setAuthLoading(false);
+        setAuthError(err.message || 'No se pudo actualizar la contraseña.');
+      }
+    });
+  };
+
+  const handleRequestResetCode = (e) => {
+    e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setAuthError('Ingresá tu correo electrónico.');
+      return;
+    }
+    if (!cognitoPool) {
+      setAuthError('Configurá Cognito en AWS para enviar códigos de recuperación por correo.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    const cognitoUser = new CognitoUser({ Username: cleanEmail, Pool: cognitoPool });
+    cognitoUser.forgotPassword({
+      onSuccess: () => {
+        setAuthLoading(false);
+        setAuthView('forgot_confirm');
+        setAuthMessage('Te enviamos un código de verificación a tu correo.');
+      },
+      onFailure: (err) => {
+        setAuthLoading(false);
+        setAuthError(err.message || 'No se pudo enviar el código.');
+      }
+    });
+  };
+
+  const handleConfirmResetPassword = (e) => {
+    e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!resetCode.trim() || !newPassword.trim()) {
+      setAuthError('Completá el código recibido por correo y tu nueva contraseña.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    const cognitoUser = new CognitoUser({ Username: cleanEmail, Pool: cognitoPool });
+    cognitoUser.confirmPassword(resetCode.trim(), newPassword, {
+      onSuccess: () => {
+        setAuthLoading(false);
+        setResetCode('');
+        setNewPassword('');
+        setPassword('');
+        setAuthView('login');
+        setAuthMessage('¡Contraseña restablecida! Ya podés iniciar sesión con tu nueva clave.');
+      },
+      onFailure: (err) => {
+        setAuthLoading(false);
+        setAuthError(err.message || 'Código inválido o contraseña muy débil.');
+      }
+    });
   };
 
   const handleLogout = () => {
+    if (cognitoPool && user?.email) {
+      const cu = new CognitoUser({ Username: user.email, Pool: cognitoPool });
+      cu.signOut();
+    }
     setUser(null);
+    setPassword('');
     localStorage.removeItem('qvf_user');
   };
 
-  // Si es profe, solo ve las categorías asignadas a él
   const allowedCategories = useMemo(() => {
     if (!user) return [];
     if (user.role === 'admin') return ALL_CATEGORIES;
     return user.categories || [];
   }, [user]);
 
-  // Alumnos visibles según rol y filtros
   const visibleStudents = useMemo(() => {
     return students.filter((s) => {
       if (user?.role === 'profe' && !allowedCategories.includes(s.category)) {
@@ -385,7 +535,11 @@ export default function App() {
     setCoaches((prev) => [createdCoach, ...prev]);
     setNewCoach({ name: '', email: '', phone: '', categories: ['2016'], enabled: false });
     setShowCoachModal(false);
-    notify(`Profe ${createdCoach.name} agregado`);
+    notify(
+      createdCoach.enabled
+        ? `Profe ${createdCoach.name} agregado y habilitado`
+        : `Profe ${createdCoach.name} agregado (pendiente de habilitar)`
+    );
 
     if (API_URL) {
       await fetch(`${API_URL}/coaches`, {
@@ -402,7 +556,7 @@ export default function App() {
     notify(
       updated.enabled
         ? `Acceso habilitado para ${coach.name}`
-        : `Acceso suspendido para ${coach.name}`
+        : `Acceso deshabilitado para ${coach.name}`
     );
 
     if (API_URL) {
@@ -548,35 +702,161 @@ export default function App() {
             <p className="text-sm text-slate-500 font-medium">Escuela de Fútbol • Profe Beto</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Correo electrónico</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
-                placeholder="tu-correo@ejemplo.com"
-              />
+          {authMessage && (
+            <div className="mb-4 p-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold">
+              {authMessage}
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Contraseña</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
-                placeholder="••••••••"
-              />
-            </div>
-            {loginError && <p className="text-red-600 text-sm font-medium">{loginError}</p>}
-            <button
-              type="submit"
-              className="w-full bg-[#10B981] hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition shadow-md"
-            >
-              Ingresar al Panel
-            </button>
-          </form>
+          )}
+
+          {authView === 'login' && (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Correo electrónico</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
+                  placeholder="tu-correo@ejemplo.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Contraseña</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              {authError && <p className="text-red-600 text-sm font-medium">{authError}</p>}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-[#10B981] hover:bg-emerald-600 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition shadow-md"
+              >
+                {authLoading ? 'Ingresando...' : 'Ingresar al Panel'}
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthError('');
+                    setAuthMessage('');
+                    setAuthView('forgot_request');
+                  }}
+                  className="text-xs font-semibold text-[#0F1E36] hover:underline inline-flex items-center gap-1"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  ¿Olvidaste tu contraseña o querés reiniciarla?
+                </button>
+              </div>
+            </form>
+          )}
+
+          {authView === 'new_password' && (
+            <form onSubmit={handleSetNewPassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Nueva contraseña</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
+                  placeholder="Mínimo 8 caracteres, mayúscula y número"
+                />
+              </div>
+              {authError && <p className="text-red-600 text-sm font-medium">{authError}</p>}
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-[#10B981] hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition"
+              >
+                {authLoading ? 'Guardando...' : 'Guardar Nueva Contraseña'}
+              </button>
+            </form>
+          )}
+
+          {authView === 'forgot_request' && (
+            <form onSubmit={handleRequestResetCode} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Correo de tu cuenta
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
+                  placeholder="tu-correo@ejemplo.com"
+                />
+              </div>
+              {authError && <p className="text-red-600 text-sm font-medium">{authError}</p>}
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-[#0F1E36] hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition"
+              >
+                {authLoading ? 'Enviando código...' : 'Enviar Código al Correo'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthError('');
+                  setAuthView('login');
+                }}
+                className="w-full text-xs font-semibold text-slate-500 hover:text-[#0F1E36] inline-flex items-center justify-center gap-1"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Volver al inicio de sesión
+              </button>
+            </form>
+          )}
+
+          {authView === 'forgot_confirm' && (
+            <form onSubmit={handleConfirmResetPassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  Código enviado a {email}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
+                  placeholder="123456"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Nueva contraseña</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#10B981] focus:outline-none"
+                  placeholder="Nueva contraseña"
+                />
+              </div>
+              {authError && <p className="text-red-600 text-sm font-medium">{authError}</p>}
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-[#10B981] hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition"
+              >
+                {authLoading ? 'Restableciendo...' : 'Confirmar Nueva Contraseña'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -1141,7 +1421,7 @@ export default function App() {
               <div>
                 <h1 className="text-2xl font-bold text-[#0F1E36]">Profes y Permisos</h1>
                 <p className="text-sm text-slate-500">
-                  Asigná categorías y habilitá el acceso para que cada profe tome asistencia
+                  Al habilitar un profe, Cognito le envía su contraseña temporal por correo
                 </p>
               </div>
               <button
@@ -1372,7 +1652,7 @@ export default function App() {
                   checked={newCoach.enabled}
                   onChange={(e) => setNewCoach({ ...newCoach, enabled: e.target.checked })}
                 />
-                <span>Habilitar acceso de inmediato (si queda desmarcado, lo habilitás luego)</span>
+                <span>Habilitar acceso y enviar contraseña temporal por correo</span>
               </label>
 
               <div className="flex justify-end gap-2 pt-3">
